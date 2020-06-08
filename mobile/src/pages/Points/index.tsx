@@ -1,9 +1,10 @@
 import React, { useState, useEffect} from 'react';
-import {Image, ScrollView, Text, TouchableOpacity, View} from "react-native";
+import {Alert, Image, ScrollView, Text, TouchableOpacity, View} from "react-native";
 import { Feather as Icon } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker } from 'react-native-maps';
 import { SvgUri } from 'react-native-svg'
+import * as Location from 'expo-location';
 import api from '../../services/api';
 
 import styles from "./style";
@@ -14,29 +15,81 @@ interface Item {
  image_url: string,
 }
 
+interface Point {
+  id: number,
+  image: string,
+  name: string,
+  latitude: number,
+  longetude: number,
+}
+
+interface Params {
+    uf: string,
+    city: string,
+}
+
 const Points = () => {
     const [items, setItems] = useState<Item[]>([]);
+    const [points, setPoints] = useState<Point[]>([]);
     const [selectedItems, setSelectedItems] = useState<number[]>([]);
+    const [initialPosition, setInitialPosition] = useState<[number, number]>([0,0]);
 
     const navigation = useNavigation();
+    const route = useRoute();
+
+    const routeParams = route.params as Params;
+
+    useEffect(() => {
+        async function loadPosition() {
+            const { status } = await Location.requestPermissionsAsync();
+
+            if (status !== 'granted') {
+               Alert.alert('Ops!!', 'Precisamos de sua permissão para obter a sua localização');
+               return;
+            }
+
+            const location = await Location.getCurrentPositionAsync();
+
+            const { latitude, longitude } = location.coords;
+
+            setInitialPosition([latitude, longitude]);
+        }
+
+        loadPosition();
+    }, [])
 
     useEffect(() => {
         api.get('items')
             .then(response => {
-                console.log(response.data);
                 setItems(response.data);
             })
             .catch(err => {
                 console.log(err);
             })
-    }, []);
+    }, [selectedItems]);
+
+    useEffect(() => {
+        api.get('points', {
+            params: {
+                uf: routeParams.uf,
+                city: routeParams.city,
+                items: selectedItems
+            }
+        })
+            .then(response => {
+                setPoints(response.data);
+            })
+            .catch(err => {
+                console.log(err);
+            })
+    }, [])
 
     function handleNavigateBack() {
         navigation.goBack();
     }
 
-    function handleNavigateToDatail() {
-        navigation.navigate('Detail');
+    function handleNavigateToDatail(id: number) {
+        navigation.navigate('Detail', {point_id: id});
     }
 
     function handleSelectItem(id: number) {
@@ -67,31 +120,41 @@ const Points = () => {
                 </Text>
 
                 <View style={styles.mapContainer}>
-                    <MapView
-                        style={styles.map}
-                        initialRegion={{
-                            latitude: -23.6500764,
-                            longitude: -46.6477025,
-                            latitudeDelta: 0.014,
-                            longitudeDelta: 0.014,
-                        }}
-                    >
-                        <Marker
-                            style={styles.mapMarker}
-                            coordinate={{
-                                latitude: -23.6500764,
-                                longitude: -46.6477025,
+                    { initialPosition[0] !== 0 && (
+                        <MapView
+                            style={styles.map}
+                            loadingEnabled={initialPosition[0] === 0}
+                            initialRegion={{
+                                latitude: initialPosition[0],
+                                longitude: initialPosition[1],
+                                latitudeDelta: 0.014,
+                                longitudeDelta: 0.014,
                             }}
-                            onPress={handleNavigateToDatail}
                         >
-                            <View style={styles.mapMarkerContainer}>
-                                <Image source={{
-                                    uri: 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=433&q=40',
-                                }} />
-                                <Text style={styles.mapMarkerTitle}>Mercado</Text>
-                            </View>
-                        </Marker>
-                    </MapView>
+                            {
+                                points.map(point => (
+                                    <Marker
+                                        key={String(point.id)}
+                                        style={styles.mapMarker}
+                                        coordinate={{
+                                            latitude: point.latitude,
+                                            longitude: point.longetude,
+                                        }}
+                                        onPress={() => handleNavigateToDatail(point.id)}
+                                    >
+                                        <View style={styles.mapMarkerContainer}>
+                                            <Image
+                                                style={styles.mapMarkerImage}
+                                                source={{
+                                                    uri: point.image,
+                                                }} />
+                                            <Text style={styles.mapMarkerTitle}>{point.name}</Text>
+                                        </View>
+                                    </Marker>
+                                ))
+                            }
+                        </MapView>
+                    )}
                 </View>
             </View>
 

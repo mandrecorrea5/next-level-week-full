@@ -65,7 +65,8 @@ const styles = StyleSheet.create({
         height: 50,
         flexDirection: 'row',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        marginTop: 8
     },
 
     buttonText: {
@@ -74,6 +75,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: 'Roboto_500Medium',
     },
+
 })
 
 export default styles;
